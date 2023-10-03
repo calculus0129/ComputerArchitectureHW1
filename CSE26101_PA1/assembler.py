@@ -358,7 +358,13 @@ def record_text_section(fout):
                     rs = args[1]
                     imm = args[2]
                 elif op in ['beq', 'bne']:
-                    pass
+                    branch = args[2]
+                    args = list(map(lambda word: someint(word.strip('$')), args[:2]))
+                    rt, rs = args[0], args[1]
+                    try:
+                        imm = someint(branch)
+                    except ValueError:
+                        imm = SYMBOL_TABLE[branch]-(cur_addr+BYTES_PER_WORD) >> 2 # as words
                 elif op in ['lw', 'sw']:
                     rt = args[0] = int(args[0].strip('$'))
                     args[1] = args[1].split('(')
@@ -383,8 +389,7 @@ def record_text_section(fout):
                 try:
                     addr = someint(args[0])
                 except ValueError:
-                    addr = SYMBOL_TABLE[args[0]]
-                addr >>= 2
+                    addr = SYMBOL_TABLE[args[0]] >> 2
                 #addr = (cur_addr & (0b1111<<28)) | ((addr<<2) & ((1<<28)-1))
                 if DEBUG:
                     log(1, f"0x" + hex(cur_addr)
