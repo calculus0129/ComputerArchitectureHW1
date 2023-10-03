@@ -248,9 +248,9 @@ def make_symbol_table(input):
                 reg = token_line[1].strip().split(',')[0]
                 name = line.split(',')[-1].strip() # name of variable
                 addr = hex(SYMBOL_TABLE[name])[2:].zfill(8) #'0x'+hex(SYMBOL_TABLE[line.split(',')[-1].strip()])[2:].zfill(8)
-                if DEBUG: log(0, 'al! => '+name+': '+addr) # Good! array2 0x1000000c
                 text_seg.write(f'lui {reg}, 0x{addr[:4]}')
                 if DEBUG:
+                    log(0, 'al! => '+name+': '+addr) # Good! array2 0x1000000c
                     log(0, f'lui {reg}, 0x{addr[:4]}')
                 is1 = addr[4:] == '0000'
                 if not is1:
@@ -259,6 +259,29 @@ def make_symbol_table(input):
                 line=''
             elif temp in ['pop', 'push', 'blt']:
                 is1 = False
+                line = ''
+                if temp == 'blt':
+                    args = list(map(lambda csw: csw.strip(), ''.join(token_line[1:]).split(',')))
+                    text_seg.write(f'slt $1, {args[0]}, {args[1]}\nbne $1, $0, {args[2]}')
+                    if DEBUG:
+                        log(0, f'blt! => args: {args}')
+                        log(0, f'slt $1, {args[0]}, {args[1]}\nbne $1, $0, {args[2]}')
+                else:
+                    reg = token_line[1]
+                    if temp == 'push':
+                        text_seg.write(f'addi $29, $29, -4\nsw {reg}, 0($29)')
+                        if DEBUG:
+                            log(0, 'push! => rs: '+reg)
+                            log(0, f'addi $29, $29, -4\nsw {reg}, 0($29)')
+                    else: # 'pop'
+                        text_seg.write(f'lw {reg}, 0($29)\naddi $29, $29, 4')
+                        if DEBUG:
+                            log(0, 'pop! => rs: '+reg)
+                            log(0, f'lw {reg}, 0($29)\naddi $29, $29, 4')
+            elif temp == 'move':
+                line = f'addi {"".join(token_line[1:])}, 0'
+                if DEBUG:
+                    log(0, f"move! => args: {''.join(token_line[1:])}\n{line}")
             # MYCODE
             global text_section_size
             text_section_size+=BYTES_PER_WORD << (0 if is1 else 1)
@@ -362,14 +385,11 @@ def record_text_section(fout):
                 if DEBUG:
                     log(1, f"0x" + hex(cur_addr)
                         [2:].zfill(8) + f" op:{inst_obj.op} addr:{addr}")
-        else: # MYCODE + pseudoinstruction
+        '''else: # MYCODE + pseudoinstruction (except for la.)
             if op == 'move':
                 args = list(map(lambda word: int(word.strip('$')), args))
                 fout.write(f"001000{num_to_bits(args[1], 5)}{num_to_bits(args[0], 5)}0000000000000000")
-            elif op == 'la':
-                pass
-            else:
-                pass
+            elif op == "":'''
         
         fout.write("\n")
         cur_addr += BYTES_PER_WORD
