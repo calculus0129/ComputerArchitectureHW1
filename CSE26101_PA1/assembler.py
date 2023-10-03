@@ -229,10 +229,13 @@ def make_symbol_table(input):
             # MYCODE
             global text_section_size
             text_section_size+=BYTES_PER_WORD
-            text_seg.write(line)
+            text_seg.write(line+'\n')
             # /MYCODE
             
         address += BYTES_PER_WORD
+
+#def branch_or_num_to_addr(s):
+#    if()
 
 def record_text_section(fout):
     # print text section
@@ -240,40 +243,86 @@ def record_text_section(fout):
     text_seg.seek(0)
 
     lines = text_seg.readlines()
+
+    # MYCODE
+    global inst_list
+    mips_table = {
+        'add':0, 'addi':1, 'addiu':2, 'addu':3, 'and' : 4,
+        'andi': 5, 'beq': 6, 'bne' : 7, 'j' : 8, 'jal': 9,
+        'jr' : 10, 'lui' : 11, 'lw' : 12, 'nor': 13, 'or' : 14,
+        'ori': 15, 'slt' : 16, 'slti' : 17, 'sltiu' : 18, 'sltu' : 19,
+        'sll' : 20, 'srl' : 21, 'sw' : 22, 'sub' : 23, 'subu' : 24
+    }
+
+    # /MYCODE
+
     for line in lines:
-        line = line.strip()
+        line = line.strip() # strip the \n at the end of the line.
         inst_type, rs, rt, rd, imm, shamt = '0', 0, 0, 0, 0, 0
         
+        # MYCODE
+        token_line = line.split()
+        op = token_line[0]
+        args = list(map(lambda word: word.strip(), ''.join(token_line[1:]).strip().split(','))) # .strip('$')
+        # /MYCODE
         '''
         blank: Find the instruction type that matches the line
         '''
+        print(line, op, args)
 
-        if inst_type == 'R':
-            '''
-            blank
-            '''
-            if DEBUG:
-                log(1, f"0x" + hex(cur_addr)[2:].zfill(
-                    8) + f": op: {op} rs:${rs} rt:${rt} rd:${rd} shamt:{shamt} funct:{inst_obj.funct}")
+        #assert('5'.strip('$') == '5') # working assertion
+        if token_line[0] in mips_table: # MYCODE + standard MIPS instruction
+            inst_obj = inst_list[mips_table[token_line[0]]]
+            inst_type = inst_obj.type
+            if inst_type == 'R': # finished: 23/10/03
+                args = list(map(lambda word: int(word.strip('$')), args))
+                if len(args) == 1: # 'jr'
+                    rs = args[0]
+                else:
+                    rd = args[0]
+                    if op in ['sll', 'srl']:
+                        rt = args[1]
+                        shamt = args[2]
+                    else:
+                        rs = args[1]
+                        rt = args[2]
+                '''
+                blank
+                '''
+                if DEBUG:
+                    log(1, f"0x" + hex(cur_addr)[2:].zfill(
+                        8) + f": op: {inst_obj.op} rs:${rs} rt:${rt} rd:${rd} shamt:{shamt} funct:{inst_obj.funct}")
+                fout.write(f'{inst_obj.op}{num_to_bits(rs, 5)}{num_to_bits(rt, 5)}{num_to_bits(rd, 5)}{num_to_bits(shamt, 5)}{inst_obj.funct}')
+            if inst_type == 'I':
+                if op in ['addi', 'addiu', 'andi', 'ori', 'slti', 'sltiu']:
+                    pass
+                elif op in ['beq', 'bne']:
+                    pass
+                elif op in ['lw', 'sw']:
+                    pass
+                else: # lui
+                    args = list(map(lambda word: int(word.strip('$')), args))
+                    rt = args[0]
+                    imm = args[1]
+                '''
+                blank
+                '''
 
-        if inst_type == 'I':
-            '''
-            blank
-            '''
-
-            if DEBUG:
-                log(1, f"0x" + hex(cur_addr)
-                    [2:].zfill(8) + f": op:{op} rs:${rs} rt:${rt} imm:0x{imm}")
-
-        if inst_type == 'J':
-            '''
-            blank
-            '''
-            
-            if DEBUG:
-                log(1, f"0x" + hex(cur_addr)
-                    [2:].zfill(8) + f" op:{op} addr:{addr}")
-
+                if DEBUG:
+                    log(1, f"0x" + hex(cur_addr)
+                        [2:].zfill(8) + f": op:{inst_obj.op} rs:${rs} rt:${rt} imm:0x{hex(imm).zfill(8)[2:]}")
+                fout.write(f'{inst_obj.op}{num_to_bits(rs, 5)}{num_to_bits(rt, 5)}{num_to_bits(imm, 16)}')
+            if inst_type == 'J':
+                '''
+                blank
+                '''
+                
+                if DEBUG:
+                    log(1, f"0x" + hex(cur_addr)
+                        [2:].zfill(8) + f" op:{inst_obj.op} addr:{addr}")
+        else: # MYCODE + pseudoinstruction
+            pass
+        
         fout.write("\n")
         cur_addr += BYTES_PER_WORD
 
