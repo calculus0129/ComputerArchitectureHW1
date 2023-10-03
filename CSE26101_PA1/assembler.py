@@ -315,7 +315,6 @@ def record_text_section(fout):
     if DEBUG == 1:
         for i in SYMBOL_TABLE:
             log(0, f"name: {i},\taddr: {num_to_hex(SYMBOL_TABLE[i])}")
-
     for line in lines:
         line = line.strip() # strip the \n at the end of the line.
         inst_type, rs, rt, rd, imm, shamt = '0', 0, 0, 0, 0, 0
@@ -375,16 +374,22 @@ def record_text_section(fout):
 
                 if DEBUG:
                     log(1, f"0x" + hex(cur_addr)
-                        [2:].zfill(8) + f": op:{inst_obj.op} rs:${rs} rt:${rt} imm:0x{hex(imm)[2:].zfill(4)}")
+                        [2:].zfill(8) + f": op:{inst_obj.op} rs:${rs} rt:${rt} imm:{num_to_hex(imm, 4)}")
                 fout.write(f'{inst_obj.op}{num_to_bits(rs, 5)}{num_to_bits(rt, 5)}{num_to_bits(imm, 16)}')
             if inst_type == 'J':
                 '''
                 blank
                 '''
-                
+                try:
+                    addr = someint(args[0])
+                except ValueError:
+                    addr = SYMBOL_TABLE[args[0]]
+                addr >>= 2
+                #addr = (cur_addr & (0b1111<<28)) | ((addr<<2) & ((1<<28)-1))
                 if DEBUG:
                     log(1, f"0x" + hex(cur_addr)
-                        [2:].zfill(8) + f" op:{inst_obj.op} addr:{addr}")
+                        [2:].zfill(8) + f" op:{inst_obj.op} addr:{num_to_hex(addr, 8)}")
+                fout.write(f'{inst_obj.op}{num_to_bits(addr, 26)}')
         '''else: # MYCODE + pseudoinstruction (except for la.)
             if op == 'move':
                 args = list(map(lambda word: int(word.strip('$')), args))
