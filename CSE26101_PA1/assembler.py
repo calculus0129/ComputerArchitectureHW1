@@ -243,7 +243,7 @@ def record_text_section(fout):
     text_seg.seek(0)
 
     lines = text_seg.readlines()
-
+    
     # MYCODE
     global inst_list
     mips_table = {
@@ -255,15 +255,16 @@ def record_text_section(fout):
     }
 
     # /MYCODE
-    is_blank = False
-    for i in SYMBOL_TABLE:
-        if i.name == 0 and i.address == 0:
-            if not is_blank:
-                log(0, '...')
-                is_blank = True
-        else:
-            log(0, f"name: {i.name}, addr: {i.address}")
-            is_blank = False
+    if DEBUG == 1:
+        is_blank = False
+        for i in SYMBOL_TABLE:
+            if i.name == 0 and i.address == 0:
+                if not is_blank:
+                    log(0, '...')
+                    is_blank = True
+            else:
+                log(0, f"name: {i.name}, addr: {i.address}")
+                is_blank = False
 
     for line in lines:
         line = line.strip() # strip the \n at the end of the line.
@@ -279,7 +280,6 @@ def record_text_section(fout):
         '''
         print(line, op, args)
 
-        
         if token_line[0] in mips_table: # MYCODE + standard MIPS instruction
             inst_obj = inst_list[mips_table[token_line[0]]]
             inst_type = inst_obj.type
@@ -304,11 +304,17 @@ def record_text_section(fout):
                 fout.write(f'{inst_obj.op}{num_to_bits(rs, 5)}{num_to_bits(rt, 5)}{num_to_bits(rd, 5)}{num_to_bits(shamt, 5)}{inst_obj.funct}')
             if inst_type == 'I':
                 if op in ['addi', 'addiu', 'andi', 'ori', 'slti', 'sltiu']:
-                    pass
+                    args = list(map(lambda word: int(word.strip('$')), args))
+                    rt = args[0]
+                    rs = args[1]
+                    imm = args[2]
                 elif op in ['beq', 'bne']:
                     pass
                 elif op in ['lw', 'sw']:
-                    pass
+                    rt = args[0] = int(args[0].strip('$'))
+                    args[1] = args[1].split('(')
+                    imm = int(args[1][0])
+                    rs = int(args[1][1][1:-1]) #assert([4, 5, 6][1:-1] == [5]) # works
                 else: # lui
                     args = list(map(lambda word: int(word.strip('$')), args))
                     rt = args[0]
@@ -331,6 +337,11 @@ def record_text_section(fout):
                         [2:].zfill(8) + f" op:{inst_obj.op} addr:{addr}")
         else: # MYCODE + pseudoinstruction
             if op == 'move':
+                args = list(map(lambda word: int(word.strip('$')), args))
+                fout.write(f"001000{num_to_bits(args[1], 5)}{num_to_bits(args[0], 5)}0000000000000000")
+            elif op == 'la':
+                pass
+            else:
                 pass
         
         fout.write("\n")
