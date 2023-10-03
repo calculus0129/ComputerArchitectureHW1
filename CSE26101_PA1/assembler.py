@@ -109,7 +109,8 @@ inst_list = [ADD,  ADDI, ADDIU, ADDU, AND,
              SUB,  SUBU, ]
 
 symbol_struct = symbol_t()
-SYMBOL_TABLE = [symbol_struct] * MAX_SYMBOL_TABLE_SIZE
+#SYMBOL_TABLE = [symbol_struct] * MAX_SYMBOL_TABLE_SIZE
+SYMBOL_TABLE = {}
 
 symbol_table_cur_index = 0
 
@@ -128,14 +129,14 @@ def change_file_ext(fin_name):
     return fout_name
 
 
-def symbol_table_add_entry(symbol):
+def symbol_table_add_entry(name, address):
     global SYMBOL_TABLE
     global symbol_table_cur_index
 
-    SYMBOL_TABLE[symbol_table_cur_index] = symbol
+    SYMBOL_TABLE[name] = address
     symbol_table_cur_index += 1
     if DEBUG:
-        log(1, f"{symbol.name}: 0x" + hex(symbol.address)[2:].zfill(8))
+        log(1, f"{name}: 0x" + hex(address)[2:].zfill(8))
 
 
 def convert_label(label):
@@ -151,6 +152,17 @@ def num_to_bits(num, len):
     bit = bin(num & (2**len-1))[2:].zfill(len)
     return bit
 
+def num_to_hex(num, len=8):
+    ret = '0x'+hex(num & ((1<<len*4)-1))[2:].zfill(len)
+    return ret
+
+def someint(numstr):
+    try:
+        return int(numstr)
+    except ValueError:
+        return int(numstr, 16)
+        #assert(int('0x821', 16) == 0x821)
+
 #################################################
 # # # # # # # # # # # # # # # # # # # # # # # # #
 #                                               #
@@ -164,6 +176,10 @@ def num_to_bits(num, len):
 def make_symbol_table(input):
     size_bit = 0
     address = 0
+    wordcnt, txtcnt = 0, 0
+    x = 4
+    x += 3 << 1
+    assert(x == 10)
 
     cur_section = section.MAX_SIZE.value
 
@@ -206,30 +222,48 @@ def make_symbol_table(input):
             blank
             '''
             if temp[-1] == ':':
-                symbol = symbol_t()
-                symbol.name = temp[:-1]
-                symbol.address = ctypes.c_uint(address).value
-                symbol_table_add_entry(symbol)
+                #symbol = symbol_t()
+                #symbol.name = temp[:-1]
+                #symbol.address = ctypes.c_uint(address).value
+                symbol_table_add_entry(temp[:-1], wordcnt+MEM_DATA_START)#symbol)
 
             word = line.find(".word")
 
             if word != -1:
                 data_seg.write("%s\n" % line[word:])
+                wordcnt += BYTES_PER_WORD
 
         elif cur_section == section.TEXT.value:
             '''
             blank
             '''
             if temp[-1] == ":":
-                symbol = symbol_t()
-                symbol.name = temp[:-1]
-                symbol.address = ctypes.c_uint(address).value
-                symbol_table_add_entry(symbol)
-                continue
+                #symbol = symbol_t()
+                #symbol.name = temp[:-1]
+                #symbol.address = ctypes.c_uint(address).value
+                symbol_table_add_entry(temp[:-1], txtcnt+MEM_TEXT_START)
+                continue # This would assert that F: 222 would not occur.
+            is1 = True
+            if temp == 'la':
+                reg = token_line[1].strip().split(',')[0]
+                name = line.split(',')[-1].strip() # name of variable
+                addr = hex(SYMBOL_TABLE[name])[2:].zfill(8) #'0x'+hex(SYMBOL_TABLE[line.split(',')[-1].strip()])[2:].zfill(8)
+                if DEBUG: log(0, 'al! => '+name+': '+addr) # Good! array2 0x1000000c
+                text_seg.write(f'lui {reg}, 0x{addr[:4]}')
+                if DEBUG:
+                    log(0, f'lui {reg}, 0x{addr[:4]}')
+                is1 = addr[4:] == '0000'
+                if not is1:
+                    text_seg.write(f'\nori {reg}, {reg}, 0x{addr[4:]}')
+                    log(0, f'ori {reg}, {reg}, 0x{addr[4:]}')
+                line=''
+            elif temp in ['pop', 'push', 'blt']:
+                is1 = False
             # MYCODE
             global text_section_size
-            text_section_size+=BYTES_PER_WORD
+            text_section_size+=BYTES_PER_WORD << (0 if is1 else 1)
             text_seg.write(line+'\n')
+            txtcnt += BYTES_PER_WORD << (0 if is1 else 1)
             # /MYCODE
             
         address += BYTES_PER_WORD
@@ -256,15 +290,8 @@ def record_text_section(fout):
 
     # /MYCODE
     if DEBUG == 1:
-        is_blank = False
         for i in SYMBOL_TABLE:
-            if i.name == 0 and i.address == 0:
-                if not is_blank:
-                    log(0, '...')
-                    is_blank = True
-            else:
-                log(0, f"name: {i.name}, addr: {i.address}")
-                is_blank = False
+            log(0, f"name: {i},\taddr: {num_to_hex(SYMBOL_TABLE[i])}")
 
     for line in lines:
         line = line.strip() # strip the \n at the end of the line.
@@ -304,7 +331,7 @@ def record_text_section(fout):
                 fout.write(f'{inst_obj.op}{num_to_bits(rs, 5)}{num_to_bits(rt, 5)}{num_to_bits(rd, 5)}{num_to_bits(shamt, 5)}{inst_obj.funct}')
             if inst_type == 'I':
                 if op in ['addi', 'addiu', 'andi', 'ori', 'slti', 'sltiu']:
-                    args = list(map(lambda word: int(word.strip('$')), args))
+                    args = list(map(lambda word: someint(word.strip('$')), args))
                     rt = args[0]
                     rs = args[1]
                     imm = args[2]
@@ -313,10 +340,10 @@ def record_text_section(fout):
                 elif op in ['lw', 'sw']:
                     rt = args[0] = int(args[0].strip('$'))
                     args[1] = args[1].split('(')
-                    imm = int(args[1][0])
+                    imm = someint(args[1][0])
                     rs = int(args[1][1][1:-1]) #assert([4, 5, 6][1:-1] == [5]) # works
                 else: # lui
-                    args = list(map(lambda word: int(word.strip('$')), args))
+                    args = list(map(lambda word: someint(word.strip('$')), args))
                     rt = args[0]
                     imm = args[1]
                 '''
