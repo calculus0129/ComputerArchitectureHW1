@@ -255,6 +255,15 @@ def record_text_section(fout):
     }
 
     # /MYCODE
+    is_blank = False
+    for i in SYMBOL_TABLE:
+        if i.name == 0 and i.address == 0:
+            if not is_blank:
+                log(0, '...')
+                is_blank = True
+        else:
+            log(0, f"name: {i.name}, addr: {i.address}")
+            is_blank = False
 
     for line in lines:
         line = line.strip() # strip the \n at the end of the line.
@@ -270,12 +279,12 @@ def record_text_section(fout):
         '''
         print(line, op, args)
 
-        #assert('5'.strip('$') == '5') # working assertion
+        
         if token_line[0] in mips_table: # MYCODE + standard MIPS instruction
             inst_obj = inst_list[mips_table[token_line[0]]]
             inst_type = inst_obj.type
             if inst_type == 'R': # finished: 23/10/03
-                args = list(map(lambda word: int(word.strip('$')), args))
+                args = list(map(lambda word: int(word.strip('$')), args)) #assert('5'.strip('$') == '5') # working assertion
                 if len(args) == 1: # 'jr'
                     rs = args[0]
                 else:
@@ -310,7 +319,7 @@ def record_text_section(fout):
 
                 if DEBUG:
                     log(1, f"0x" + hex(cur_addr)
-                        [2:].zfill(8) + f": op:{inst_obj.op} rs:${rs} rt:${rt} imm:0x{hex(imm).zfill(8)[2:]}")
+                        [2:].zfill(8) + f": op:{inst_obj.op} rs:${rs} rt:${rt} imm:0x{hex(imm)[2:].zfill(4)}")
                 fout.write(f'{inst_obj.op}{num_to_bits(rs, 5)}{num_to_bits(rt, 5)}{num_to_bits(imm, 16)}')
             if inst_type == 'J':
                 '''
@@ -321,7 +330,8 @@ def record_text_section(fout):
                     log(1, f"0x" + hex(cur_addr)
                         [2:].zfill(8) + f" op:{inst_obj.op} addr:{addr}")
         else: # MYCODE + pseudoinstruction
-            pass
+            if op == 'move':
+                pass
         
         fout.write("\n")
         cur_addr += BYTES_PER_WORD
