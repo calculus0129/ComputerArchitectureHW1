@@ -327,7 +327,7 @@ def record_text_section(fout):
         '''
         blank: Find the instruction type that matches the line
         '''
-        print(line, op, args)
+        if DEBUG==1: print(line, op, args)
 
         if token_line[0] in mips_table: # MYCODE + standard MIPS instruction
             inst_obj = inst_list[mips_table[token_line[0]]]
